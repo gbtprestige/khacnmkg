@@ -9,6 +9,8 @@ import random
 import json
 import logging
 import os
+from flask import Flask
+from threading import Thread
 
 # Configuration du logging
 logging.basicConfig(
@@ -20,8 +22,8 @@ logger = logging.getLogger(__name__)
 # Clé API Telegram (chargée depuis une variable d'environnement)
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7303960829:AAFSS5lpxXt9TXEmoItAyCvNysedsV9M73w")
 
-# URL publique pour le webhook (Railway)
-WEBHOOK_URL = os.getenv("RAILWAY_APP_URL", "https://your-railway-app-url.onrender.com")
+# URL publique pour le webhook (Replit)
+WEBHOOK_URL = f"https://{os.getenv('REPL_SLUG')}.{os.getenv('REPL_OWNER')}.repl.co"
 
 # URL de l'image du token KHACN
 IMAGE_URL = "https://raw.githubusercontent.com/startar-bronze/khacngit/main/PNG%20KHAC%20LOGO.png"
@@ -196,7 +198,7 @@ def schedule_tasks(updater):
 def configure_webhook(updater):
     if WEBHOOK_URL:
         try:
-            PORT = int(os.getenv('PORT', '8443'))
+            PORT = int(os.getenv('PORT', '8080'))
             updater.start_webhook(listen="0.0.0.0",
                                   port=PORT,
                                   url_path=TOKEN,
@@ -207,6 +209,20 @@ def configure_webhook(updater):
     else:
         logger.error("L'URL du webhook n'est pas définie. Le bot utilisera polling...")
         updater.start_polling()
+
+# Maintenir le bot en ligne avec Flask
+def keep_alive():
+    app = Flask(__name__)
+
+    @app.route('/')
+    def home():
+        return "Bot en ligne !"
+
+    def run():
+        app.run(host='0.0.0.0', port=8080)
+
+    t = Thread(target=run)
+    t.start()
 
 def main():
     global GROUPS_TO_POST
@@ -229,6 +245,9 @@ def main():
 
     # Configurer le webhook ou utiliser polling
     configure_webhook(updater)
+
+    # Maintenir le bot en ligne
+    keep_alive()
 
     # Gestion des tâches planifiées
     schedule_tasks(updater)
