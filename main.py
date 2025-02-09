@@ -1,5 +1,5 @@
 from telegram import Update, InputMediaPhoto
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 import requests
 from PIL import Image
 import io
@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 # Clé API Telegram (chargée depuis une variable d'environnement)
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7303960829:AAFSS5lpxXt9TXEmoItAyCvNysedsV9M73w")
 
-# URL publique pour le webhook (à configurer dans Netlify ou un autre service)
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://your-netlify-app-url.com")
+# URL publique pour le webhook (Heroku)
+WEBHOOK_URL = os.getenv("HEROKU_APP_URL", "https://your-heroku-app-url.herokuapp.com")
 
 # URL de l'image du token KHACN
 IMAGE_URL = "https://raw.githubusercontent.com/startar-bronze/khacngit/main/PNG%20KHAC%20LOGO.png"
@@ -89,38 +89,65 @@ def resize_image(image_url):
 def start(update: Update, context: CallbackContext):
     price = get_khacn_price()
     message_fr = f"""
-    Bienvenue dans le bot KharYsma Coin ! 🚀
-    Prix actuel : ${price:.2f} USD
-    """
+Bienvenue dans le bot KharYsma Coin ! 🚀
+Prix actuel : ${price:.2f} USD
+"""
     message_en = f"""
-    Welcome to the KharYsma Coin bot! 🚀
-    Current Price: ${price:.2f} USD
-    """
+Welcome to the KharYsma Coin bot! 🚀
+Current Price: ${price:.2f} USD
+"""
     update.message.reply_text(message_fr)
     update.message.reply_text(message_en)
 
 def shill(update: Update, context: CallbackContext):
     price = get_khacn_price()
     message_fr = f"""
-    💰 Investissez dans KharYsma Coins !
-    Prix actuel : ${price:.2f} USD
-    Token ERC-20 innovant basé sur les actifs tangibles de l'artiste KharYsma Arafat NZABA.
-    Contrat : 0x11c1b94294A7967092F747434dEE4876EcA5fD53
-    Site web : https://khacn.startarcoins.com
-    Pool Uniswap : https://app.uniswap.org/explore/tokens/ethereum/0x11c1b94294a7967092f747434dee4876eca5fd53
-    Capitalisation : https://topcryptocap.org
-    """
+💰 Investissez dans KharYsma Coins !
+Prix actuel : ${price:.2f} USD
+Token ERC-20 innovant basé sur les actifs tangibles de l'artiste KharYsma Arafat NZABA.
+Contrat : 0x11c1b94294A7967092F747434dEE4876EcA5fD53
+Site web : https://khacn.startarcoins.com
+Pool Uniswap : https://app.uniswap.org/explore/tokens/ethereum/0x11c1b94294a7967092f747434dee4876eca5fd53
+Capitalisation : https://topcryptocap.org
+"""
     message_en = f"""
-    💰 Invest in KharYsma Coins!
-    Current Price: ${price:.2f} USD
-    Innovative ERC-20 token based on the tangible assets of artist KharYsma Arafat NZABA.
-    Contract: 0x11c1b94294A7967092F747434dEE4876EcA5fD53
-    Website: https://khacn.startarcoins.com
-    Uniswap Pool: https://app.uniswap.org/explore/tokens/ethereum/0x11c1b94294a7967092f747434dee4876eca5fd53
-    Market Cap: https://topcryptocap.org
-    """
+💰 Invest in KharYsma Coins!
+Current Price: ${price:.2f} USD
+Innovative ERC-20 token based on the tangible assets of artist KharYsma Arafat NZABA.
+Contract: 0x11c1b94294A7967092F747434dEE4876EcA5fD53
+Website: https://khacn.startarcoins.com
+Uniswap Pool: https://app.uniswap.org/explore/tokens/ethereum/0x11c1b94294a7967092f747434dee4876eca5fd53
+Market Cap: https://topcryptocap.org
+"""
     update.message.reply_text(message_fr)
     update.message.reply_text(message_en)
+
+# Message de bienvenue privée
+def welcome_new_member(update: Update, context: CallbackContext):
+    for member in update.message.new_chat_members:
+        message = f"""
+Bonjour {member.first_name} ! 🚀
+
+Bienvenue dans le groupe KharYsma Coin ! Voici comment participer activement :
+
+✅ **Devenir Liquidity Provider** :
+1. Ajoutez du liquidity à notre pool Uniswap.
+2. Suivez ce lien : https://app.uniswap.org/explore/tokens/ethereum/0x11c1b94294a7967092f747434dee4876eca5fd53
+3. Configurez le prix à 1 KHACN = 550 USD minimum.
+4. Connectez votre portefeuille Ethereum (MetaMask ou autre).
+
+✅ **Acheter des KHACN** :
+1. Ajoutez KHACN comme token personnalisé dans votre portefeuille avec l'adresse : 0x11c1b94294A7967092F747434dEE4876EcA5fD53.
+2. Suivez ce lien : https://app.uniswap.org/explore/tokens/ethereum/0x11c1b94294a7967092f747434dee4876eca5fd53
+3. Suivez les instructions à l'écran pour échanger vos ETH contre des KHACN.
+
+Rejoignez-nous sur : https://t.me/gbtcryptohub
+Site web : https://khacn.startarcoins.com
+"""
+        try:
+            context.bot.send_message(chat_id=member.id, text=message)
+        except Exception as e:
+            logger.error(f"Impossible d'envoyer un message privé à {member.first_name} : {e}")
 
 # Publication automatique dans des groupes
 def send_shill_message(bot):
@@ -160,50 +187,18 @@ def send_shill_message(bot):
         GROUPS_TO_POST.remove(group_id)
     save_groups(GROUPS_TO_POST)
 
-# Ajout automatique de nouveaux groupes
-def add_new_groups(bot):
-    global GROUPS_TO_POST
-
-    new_groups = fetch_relevant_groups()
-
-    for group_id in new_groups:
-        if group_id not in GROUPS_TO_POST:
-            try:
-                # Vérifie si le bot peut poster dans le groupe
-                bot.send_message(chat_id=group_id, text="Test de connexion au groupe.", timeout=10)
-                GROUPS_TO_POST.append(group_id)
-                save_groups(GROUPS_TO_POST)
-                logger.info(f"Groupe ajouté : {group_id}")
-            except Exception as e:
-                logger.error(f"Impossible d'ajouter le groupe {group_id} : {e}")
-
-# Récupérer des groupes pertinents via un service tiers
-def fetch_relevant_groups():
-    try:
-        # Exemple : Utiliser un service tiers pour récupérer des groupes publics
-        response = requests.get("https://api.telegram-groups-service.com/crypto-groups", timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            return data.get("groups", [])
-        else:
-            logger.error(f"Erreur lors de la récupération des groupes : {response.status_code}")
-            return []
-    except Exception as e:
-        logger.error(f"Erreur lors de la récupération des groupes : {e}")
-        return []
-
 # Planification des tâches
 def schedule_tasks(updater):
     bot = updater.bot
     schedule.every(1).hours.do(send_shill_message, bot)
-    schedule.every(6).hours.do(add_new_groups, bot)
 
 # Configurer le webhook
 def configure_webhook(updater):
     if WEBHOOK_URL:
         try:
+            PORT = int(os.getenv('PORT', '8443'))
             updater.start_webhook(listen="0.0.0.0",
-                                  port=int(os.getenv('PORT', '8443')),
+                                  port=PORT,
                                   url_path=TOKEN,
                                   webhook_url=f"{WEBHOOK_URL}/{TOKEN}")
             logger.info("Webhook configuré avec succès.")
@@ -228,6 +223,9 @@ def main():
     # Ajouter des commandes
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("shill", shill))
+
+    # Gérer les nouveaux membres
+    dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome_new_member))
 
     # Configurer le webhook ou utiliser polling
     configure_webhook(updater)
