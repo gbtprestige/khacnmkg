@@ -7,16 +7,19 @@ import schedule
 import time
 import random
 
-# Clé API Telegram
-TOKEN = "7303960829:AAFSS5lpxXt9TXEmoItAyCvNysedsV9M73w"
+# Clé API Telegram (remplacez par votre clé réelle)
+TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
 
 # URL de l'image du token KHACN
 IMAGE_URL = "https://raw.githubusercontent.com/startar-bronze/khacngit/main/PNG%20KHAC%20LOGO.png"
 
+# Liste de groupes Telegram pertinents (à remplir manuellement ou via recherche automatique)
+GROUPS_TO_POST = []
+
 # Fonction pour récupérer le prix du KHACN depuis l'API
 def get_khacn_price():
     try:
-        response = requests.get("https://topcryptocap.org/api/khacn")
+        response = requests.get("https://topcryptocap.org/api/khacn", timeout=10)
         data = response.json()
         return data.get("price_usd", "N/A")
     except Exception as e:
@@ -25,18 +28,31 @@ def get_khacn_price():
 
 # Fonction pour redimensionner l'image
 def resize_image(image_url):
-    response = requests.get(image_url)
-    img = Image.open(io.BytesIO(response.content))
-    img_resized = img.resize((300, 300))  # Redimensionne l'image à 300x300 pixels
-    img_byte_arr = io.BytesIO()
-    img_resized.save(img_byte_arr, format="PNG")
-    img_byte_arr.seek(0)
-    return img_byte_arr
+    try:
+        response = requests.get(image_url, timeout=10)
+        img = Image.open(io.BytesIO(response.content))
+        img_resized = img.resize((300, 300))  # Redimensionne l'image à 300x300 pixels
+        img_byte_arr = io.BytesIO()
+        img_resized.save(img_byte_arr, format="PNG")
+        img_byte_arr.seek(0)
+        return img_byte_arr
+    except Exception as e:
+        print(f"Erreur lors du redimensionnement de l'image : {e}")
+        return None
 
 # Messages en français et anglais
 def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Bienvenue dans le bot KharYsma Coin ! 🚀")
-    update.message.reply_text("Welcome to the KharYsma Coin bot! 🚀")
+    price = get_khacn_price()
+    message_fr = f"""
+    Bienvenue dans le bot KharYsma Coin ! 🚀
+    Prix actuel : ${price} USD
+    """
+    message_en = f"""
+    Welcome to the KharYsma Coin bot! 🚀
+    Current Price: ${price} USD
+    """
+    update.message.reply_text(message_fr)
+    update.message.reply_text(message_en)
 
 def shill(update: Update, context: CallbackContext):
     price = get_khacn_price()
@@ -61,48 +77,41 @@ def shill(update: Update, context: CallbackContext):
     update.message.reply_text(message_fr)
     update.message.reply_text(message_en)
 
-# Recherche automatique de groupes pertinents
-def find_and_post(bot):
-    # Liste de mots-clés pour trouver des groupes pertinents
-    keywords = ["crypto", "blockchain", "ethereum", "defi", "tokens"]
+# Publication automatique dans des groupes
+def send_shill_message(bot):
+    if not GROUPS_TO_POST:
+        print("Aucun groupe configuré pour la publication.")
+        return
 
-    for keyword in keywords:
+    price = get_khacn_price()
+    message_fr = f"🚀 KharYsma Coins - L'avenir des cryptos ! Prix actuel : ${price} USD. Rejoignez-nous : https://khacn.startarcoins.com"
+    message_en = f"🚀 KharYsma Coins - The future of crypto! Current price: ${price} USD. Join us: https://khacn.startarcoins.com"
+
+    resized_image = resize_image(IMAGE_URL)
+    if not resized_image:
+        print("Impossible de redimensionner l'image.")
+        return
+
+    for group_id in GROUPS_TO_POST:
         try:
-            # Recherche de groupes (simulée car Telegram n'autorise pas directement la recherche programmatique)
-            groups = simulate_group_search(keyword)  # Fonction simulée
+            media = InputMediaPhoto(media=resized_image, caption=message_fr)
+            bot.send_media_group(chat_id=group_id, media=[media])
+            time.sleep(2)  # Attendre 2 secondes entre les messages
 
-            for group_id in groups:
-                price = get_khacn_price()
-                message_fr = f"🚀 KharYsma Coins - L'avenir des cryptos ! Prix actuel : ${price} USD. Rejoignez-nous : https://khacn.startarcoins.com"
-                message_en = f"🚀 KharYsma Coins - The future of crypto! Current price: ${price} USD. Join us: https://khacn.startarcoins.com"
-
-                # Redimensionner l'image
-                resized_image = resize_image(IMAGE_URL)
-
-                # Envoyer le message avec l'image
-                media = InputMediaPhoto(media=resized_image, caption=message_fr)
-                bot.send_media_group(chat_id=group_id, media=[media])
-                time.sleep(2)  # Attendre 2 secondes entre les messages
-
-                media = InputMediaPhoto(media=resized_image, caption=message_en)
-                bot.send_media_group(chat_id=group_id, media=[media])
-                time.sleep(2)  # Attendre 2 secondes entre les messages
+            media = InputMediaPhoto(media=resized_image, caption=message_en)
+            bot.send_media_group(chat_id=group_id, media=[media])
+            time.sleep(2)  # Attendre 2 secondes entre les messages
 
         except Exception as e:
-            print(f"Erreur lors de la publication dans les groupes : {e}")
-
-# Simulation de la recherche de groupes
-def simulate_group_search(keyword):
-    # Simule la recherche de groupes pertinents (remplacez par une implémentation réelle si possible)
-    return ["-1001234567890", "-1009876543210"]  # IDs simulés de groupes
+            print(f"Erreur lors de la publication dans le groupe {group_id} : {e}")
 
 # Planification des publications automatiques
 def schedule_posts(updater):
     bot = updater.bot
-    schedule.every(1).hours.do(find_and_post, bot)
+    schedule.every(1).hours.do(send_shill_message, bot)
 
 def main():
-    updater = Updater(TOKEN)
+    updater = Updater(TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
     # Ajouter des commandes
