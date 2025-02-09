@@ -8,6 +8,7 @@ import time
 import random
 import json
 import logging
+import os
 
 # Configuration du logging
 logging.basicConfig(
@@ -16,8 +17,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Clé API Telegram (intégrée directement)
-TOKEN = "7303960829:AAFSS5lpxXt9TXEmoItAyCvNysedsV9M73w"
+# Clé API Telegram (chargée depuis une variable d'environnement)
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7303960829:AAFSS5lpxXt9TXEmoItAyCvNysedsV9M73w")
+
+# URL publique pour le webhook (à configurer dans Netlify ou un autre service)
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://your-netlify-app-url.com")
 
 # URL de l'image du token KHACN
 IMAGE_URL = "https://raw.githubusercontent.com/startar-bronze/khacngit/main/PNG%20KHAC%20LOGO.png"
@@ -25,12 +29,27 @@ IMAGE_URL = "https://raw.githubusercontent.com/startar-bronze/khacngit/main/PNG%
 # Fichier pour stocker les groupes
 GROUPS_FILE = "groups.json"
 
+# Initialiser le fichier groups.json si nécessaire
+def initialize_groups_file():
+    if not os.path.exists(GROUPS_FILE):
+        with open(GROUPS_FILE, "w") as file:
+            json.dump([], file)
+        logger.info("Fichier groups.json initialisé.")
+
 # Charger la liste des groupes depuis un fichier JSON
 def load_groups():
     try:
         with open(GROUPS_FILE, "r") as file:
-            return json.load(file)
+            groups = json.load(file)
+            if not isinstance(groups, list):  # Vérifie que le contenu est un tableau
+                logger.error("Le fichier groups.json est mal formé. Réinitialisation.")
+                return []
+            return groups
     except FileNotFoundError:
+        logger.info("Le fichier groups.json n'existe pas. Création d'un fichier vide.")
+        return []
+    except json.JSONDecodeError:
+        logger.error("Le fichier groups.json est mal formé. Réinitialisation.")
         return []
 
 # Sauvegarder la liste des groupes dans un fichier JSON
@@ -179,8 +198,26 @@ def schedule_tasks(updater):
     schedule.every(1).hours.do(send_shill_message, bot)
     schedule.every(6).hours.do(add_new_groups, bot)
 
+# Configurer le webhook
+def configure_webhook(updater):
+    if WEBHOOK_URL:
+        try:
+            updater.start_webhook(listen="0.0.0.0",
+                                  port=int(os.getenv('PORT', '8443')),
+                                  url_path=TOKEN,
+                                  webhook_url=f"{WEBHOOK_URL}/{TOKEN}")
+            logger.info("Webhook configuré avec succès.")
+        except Exception as e:
+            logger.error(f"Erreur lors de la configuration du webhook : {e}")
+    else:
+        logger.error("L'URL du webhook n'est pas définie. Le bot utilisera polling...")
+        updater.start_polling()
+
 def main():
     global GROUPS_TO_POST
+
+    # Initialiser le fichier groups.json si nécessaire
+    initialize_groups_file()
 
     # Charger les groupes existants
     GROUPS_TO_POST = load_groups()
@@ -192,8 +229,8 @@ def main():
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("shill", shill))
 
-    # Démarrer le bot
-    updater.start_polling()
+    # Configurer le webhook ou utiliser polling
+    configure_webhook(updater)
 
     # Gestion des tâches planifiées
     schedule_tasks(updater)
