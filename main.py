@@ -9,7 +9,7 @@ import random
 import json
 import logging
 import os
-from flask import Flask
+from flask import Flask, request
 from threading import Thread
 
 # Configuration du logging
@@ -116,7 +116,7 @@ Capitalisation : https://topcryptocap.org
 💰 Invest in KharYsma Coins!
 Current Price: ${price:.2f} USD
 Innovative ERC-20 token based on the tangible assets of artist KharYsma Arafat NZABA.
-Contract: 0x11c1b94294A7967092F747434dEE4876EcA5fD53
+Contract: 0x11c1b94294A7967092F747434dee4876eca5fD53
 Website: https://khacn.startarcoins.com
 Uniswap Pool: https://app.uniswap.org/explore/tokens/ethereum/0x11c1b94294a7967092f747434dee4876eca5fd53
 Market Cap: https://topcryptocap.org
@@ -139,7 +139,7 @@ Bienvenue dans le groupe KharYsma Coin ! Voici comment participer activement :
 4. Connectez votre portefeuille Ethereum (MetaMask ou autre).
 
 ✅ **Acheter des KHACN** :
-1. Ajoutez KHACN comme token personnalisé dans votre portefeuille avec l'adresse : 0x11c1b94294A7967092F747434dEE4876EcA5fD53.
+1. Ajoutez KHACN comme token personnalisé dans votre portefeuille avec l'adresse : 0x11c1b94294A7967092F747434dee4876eca5fD53.
 2. Suivez ce lien : https://app.uniswap.org/explore/tokens/ethereum/0x11c1b94294a7967092f747434dee4876eca5fd53
 3. Suivez les instructions à l'écran pour échanger vos ETH contre des KHACN.
 
@@ -152,7 +152,7 @@ Site web : https://khacn.startarcoins.com
             logger.error(f"Impossible d'envoyer un message privé à {member.first_name} : {e}")
 
 # Publication automatique dans des groupes
-async def send_shill_message(bot):
+async def send_shill_message(application):
     global GROUPS_TO_POST
 
     if not GROUPS_TO_POST:
@@ -173,11 +173,11 @@ async def send_shill_message(bot):
     for group_id in GROUPS_TO_POST:
         try:
             media = InputMediaPhoto(media=resized_image, caption=message_fr)
-            await bot.send_media_group(chat_id=group_id, media=[media])
+            await application.bot.send_media_group(chat_id=group_id, media=[media])
             time.sleep(2)  # Attendre 2 secondes entre les messages
 
             media = InputMediaPhoto(media=resized_image, caption=message_en)
-            await bot.send_media_group(chat_id=group_id, media=[media])
+            await application.bot.send_media_group(chat_id=group_id, media=[media])
             time.sleep(2)  # Attendre 2 secondes entre les messages
 
         except Exception as e:
@@ -192,7 +192,7 @@ async def send_shill_message(bot):
 # Planification des tâches
 def schedule_tasks(application):
     bot = application.bot
-    schedule.every(1).hours.do(lambda: send_shill_message(bot))
+    schedule.every(1).hours.do(lambda: asyncio.create_task(send_shill_message(application)))
 
 # Configurer le webhook
 async def configure_webhook(application):
@@ -215,11 +215,22 @@ def keep_alive():
     def home():
         return "Bot en ligne !"
 
+    @app.route('/' + TOKEN, methods=['POST'])
+    async def webhook():
+        update = await application.update_queue.put(request.get_json(force=True))
+        return '', 200
+
     def run():
         app.run(host='0.0.0.0', port=8080)
 
     t = Thread(target=run)
     t.start()
+
+# Gestionnaire d'erreurs global
+async def error_handler(update, context):
+    logger.error(f"Erreur non gérée : {context.error}")
+    if update.effective_message:
+        await update.effective_message.reply_text("Une erreur s'est produite. Veuillez réessayer plus tard.")
 
 # Fonction principale
 async def main():
@@ -241,6 +252,9 @@ async def main():
     # Gérer les nouveaux membres
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
 
+    # Ajouter un gestionnaire d'erreurs global
+    application.add_error_handler(error_handler)
+
     # Configurer le webhook ou utiliser polling
     await configure_webhook(application)
 
@@ -251,10 +265,10 @@ async def main():
     while True:
         try:
             schedule.run_pending()
-            time.sleep(1)
+            await asyncio.sleep(1)
         except Exception as e:
             logger.error(f"Erreur critique dans le scheduler : {e}")
-            time.sleep(10)  # Attente avant de réessayer
+            await asyncio.sleep(10)  # Attente avant de réessayer
 
 if __name__ == "__main__":
     import asyncio
