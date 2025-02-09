@@ -1,6 +1,4 @@
-import telegram
-print(f"Version de python-telegram-bot : {telegram.__version__}")
-from telegram import Update, InputMediaPhoto
+from telegram import Bot, InputMediaPhoto
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 import requests
 from PIL import Image
@@ -25,7 +23,7 @@ logger = logging.getLogger(__name__)
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7303960829:AAFSS5lpxXt9TXEmoItAyCvNysedsV9M73w")
 
 # URL publique pour le webhook (Replit)
-WEBHOOK_URL = f"https://{os.getenv('REPL_SLUG')}.{os.getenv('REPL_OWNER')}.repl.co"
+WEBHOOK_URL = f"https://{os.getenv('REPL_SLUG', 'khacnmkg')}.{os.getenv('REPL_OWNER', 'your-replit-username')}.repl.co"
 
 # URL de l'image du token KHACN
 IMAGE_URL = "https://raw.githubusercontent.com/startar-bronze/khacngit/main/PNG%20KHAC%20LOGO.png"
@@ -90,7 +88,7 @@ def resize_image(image_url):
         return None
 
 # Messages en français et anglais
-def start(update: Update, context: CallbackContext):
+def start(update, context):
     price = get_khacn_price()
     message_fr = f"""
 Bienvenue dans le bot KharYsma Coin ! 🚀
@@ -103,7 +101,7 @@ Current Price: ${price:.2f} USD
     update.message.reply_text(message_fr)
     update.message.reply_text(message_en)
 
-def shill(update: Update, context: CallbackContext):
+def shill(update, context):
     price = get_khacn_price()
     message_fr = f"""
 💰 Investissez dans KharYsma Coins !
@@ -127,7 +125,7 @@ Market Cap: https://topcryptocap.org
     update.message.reply_text(message_en)
 
 # Message de bienvenue privée
-def welcome_new_member(update: Update, context: CallbackContext):
+def welcome_new_member(update, context):
     for member in update.message.new_chat_members:
         message = f"""
 Bonjour {member.first_name} ! 🚀
@@ -201,13 +199,16 @@ def configure_webhook(updater):
     if WEBHOOK_URL:
         try:
             PORT = int(os.getenv('PORT', '8080'))
-            updater.start_webhook(listen="0.0.0.0",
-                                  port=PORT,
-                                  url_path=TOKEN,
-                                  webhook_url=f"{WEBHOOK_URL}/{TOKEN}")
-            logger.info("Webhook configuré avec succès.")
+            updater.start_webhook(
+                listen="0.0.0.0",
+                port=PORT,
+                url_path=TOKEN,
+                webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
+            )
+            logger.info(f"Webhook configuré avec succès sur {WEBHOOK_URL}/{TOKEN}.")
         except Exception as e:
             logger.error(f"Erreur lors de la configuration du webhook : {e}")
+            updater.start_polling()  # Basculer vers polling en cas d'échec
     else:
         logger.error("L'URL du webhook n'est pas définie. Le bot utilisera polling...")
         updater.start_polling()
@@ -251,8 +252,7 @@ def main():
     # Maintenir le bot en ligne
     keep_alive()
 
-    # Gestion des tâches planifiées
-    schedule_tasks(updater)
+    # Boucle infinie pour exécuter les tâches planifiées
     while True:
         try:
             schedule.run_pending()
