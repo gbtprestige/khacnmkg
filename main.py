@@ -16,8 +16,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Clé API Telegram (remplacez par votre clé réelle)
-TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+# Clé API Telegram (intégrée directement)
+TOKEN = "7303960829:AAFSS5lpxXt9TXEmoItAyCvNysedsV9M73w"
 
 # URL de l'image du token KHACN
 IMAGE_URL = "https://raw.githubusercontent.com/startar-bronze/khacngit/main/PNG%20KHAC%20LOGO.png"
