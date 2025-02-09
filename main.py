@@ -1,3 +1,5 @@
+import telegram
+print(f"Version de python-telegram-bot : {telegram.__version__}")
 from telegram import Update, InputMediaPhoto
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 import requests
