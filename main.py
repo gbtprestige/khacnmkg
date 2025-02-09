@@ -1,5 +1,5 @@
-from telegram import Bot, InputMediaPhoto
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram import InputMediaPhoto
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import requests
 from PIL import Image
 import io
@@ -88,7 +88,7 @@ def resize_image(image_url):
         return None
 
 # Messages en français et anglais
-def start(update, context):
+async def start(update, context):
     price = get_khacn_price()
     message_fr = f"""
 Bienvenue dans le bot KharYsma Coin ! 🚀
@@ -98,10 +98,10 @@ Prix actuel : ${price:.2f} USD
 Welcome to the KharYsma Coin bot! 🚀
 Current Price: ${price:.2f} USD
 """
-    update.message.reply_text(message_fr)
-    update.message.reply_text(message_en)
+    await update.message.reply_text(message_fr)
+    await update.message.reply_text(message_en)
 
-def shill(update, context):
+async def shill(update, context):
     price = get_khacn_price()
     message_fr = f"""
 💰 Investissez dans KharYsma Coins !
@@ -121,11 +121,11 @@ Website: https://khacn.startarcoins.com
 Uniswap Pool: https://app.uniswap.org/explore/tokens/ethereum/0x11c1b94294a7967092f747434dee4876eca5fd53
 Market Cap: https://topcryptocap.org
 """
-    update.message.reply_text(message_fr)
-    update.message.reply_text(message_en)
+    await update.message.reply_text(message_fr)
+    await update.message.reply_text(message_en)
 
 # Message de bienvenue privée
-def welcome_new_member(update, context):
+async def welcome_new_member(update, context):
     for member in update.message.new_chat_members:
         message = f"""
 Bonjour {member.first_name} ! 🚀
@@ -147,12 +147,12 @@ Rejoignez-nous sur : https://t.me/gbtcryptohub
 Site web : https://khacn.startarcoins.com
 """
         try:
-            context.bot.send_message(chat_id=member.id, text=message)
+            await context.bot.send_message(chat_id=member.id, text=message)
         except Exception as e:
             logger.error(f"Impossible d'envoyer un message privé à {member.first_name} : {e}")
 
 # Publication automatique dans des groupes
-def send_shill_message(bot):
+async def send_shill_message(bot):
     global GROUPS_TO_POST
 
     if not GROUPS_TO_POST:
@@ -173,11 +173,11 @@ def send_shill_message(bot):
     for group_id in GROUPS_TO_POST:
         try:
             media = InputMediaPhoto(media=resized_image, caption=message_fr)
-            bot.send_media_group(chat_id=group_id, media=[media])
+            await bot.send_media_group(chat_id=group_id, media=[media])
             time.sleep(2)  # Attendre 2 secondes entre les messages
 
             media = InputMediaPhoto(media=resized_image, caption=message_en)
-            bot.send_media_group(chat_id=group_id, media=[media])
+            await bot.send_media_group(chat_id=group_id, media=[media])
             time.sleep(2)  # Attendre 2 secondes entre les messages
 
         except Exception as e:
@@ -190,28 +190,22 @@ def send_shill_message(bot):
     save_groups(GROUPS_TO_POST)
 
 # Planification des tâches
-def schedule_tasks(updater):
-    bot = updater.bot
-    schedule.every(1).hours.do(send_shill_message, bot)
+def schedule_tasks(application):
+    bot = application.bot
+    schedule.every(1).hours.do(lambda: send_shill_message(bot))
 
 # Configurer le webhook
-def configure_webhook(updater):
+async def configure_webhook(application):
     if WEBHOOK_URL:
         try:
-            PORT = int(os.getenv('PORT', '8080'))
-            updater.start_webhook(
-                listen="0.0.0.0",
-                port=PORT,
-                url_path=TOKEN,
-                webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
-            )
+            await application.bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
             logger.info(f"Webhook configuré avec succès sur {WEBHOOK_URL}/{TOKEN}.")
         except Exception as e:
             logger.error(f"Erreur lors de la configuration du webhook : {e}")
-            updater.start_polling()  # Basculer vers polling en cas d'échec
+            application.run_polling()  # Basculer vers polling en cas d'échec
     else:
         logger.error("L'URL du webhook n'est pas définie. Le bot utilisera polling...")
-        updater.start_polling()
+        application.run_polling()
 
 # Maintenir le bot en ligne avec Flask
 def keep_alive():
@@ -227,7 +221,8 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-def main():
+# Fonction principale
+async def main():
     global GROUPS_TO_POST
 
     # Initialiser le fichier groups.json si nécessaire
@@ -236,18 +231,18 @@ def main():
     # Charger les groupes existants
     GROUPS_TO_POST = load_groups()
 
-    updater = Updater(TOKEN, use_context=True)
-    dispatcher = updater.dispatcher
+    # Initialiser l'application
+    application = Application.builder().token(TOKEN).build()
 
     # Ajouter des commandes
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("shill", shill))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("shill", shill))
 
     # Gérer les nouveaux membres
-    dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome_new_member))
+    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
 
     # Configurer le webhook ou utiliser polling
-    configure_webhook(updater)
+    await configure_webhook(application)
 
     # Maintenir le bot en ligne
     keep_alive()
@@ -262,4 +257,5 @@ def main():
             time.sleep(10)  # Attente avant de réessayer
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
